@@ -67,7 +67,7 @@ _Last updated: 2026-11-05_
 - **The role unlocks tools, not data.** The role adds the panel and reports. Which patients a clinician can see is still decided only by accepted `care_links`, so patients stay in control and `requirePatientAccess` needs no special case.
 - Uses the same invite workflow as caregivers, so no extra tables are needed. The panel is a query over `care_links` where the clinician is the caregiver.
 
-Proposed defaults (not yet confirmed):
+Confirmed defaults:
 - An admin assigns the role in user management. There is no credential check, and the README should say so under Known Limitations.
 - Clinicians have the same abilities as caregivers on a linked patient, including day comments.
 - A clinician account is still a normal account and can have its own glucose data.
@@ -256,4 +256,4 @@ glucoscope/
 
 ## 14. Open Questions
 
-- Confirm the proposed clinician defaults in section 3.
+None. The design is settled, and the next step is the week 1 scaffold.
