@@ -1,0 +1,9 @@
+{% layout 'main' %}
+{% block content %}
+  <h1>{{ status }}: {{ title }}</h1>
+  <p class="lead">{{ message }}</p>
+  <p><a href="/">Back to home</a></p>
+  {% if stack %}
+    <pre class="error-stack">{{ stack }}</pre>
+  {% endif %}
+{% endblock %}
