@@ -26,7 +26,7 @@ _Last updated: 2026-11-05_
 | Charts | Server-rendered (no client-side chart libraries) | Plan: inline SVG generated on the server |
 | Database | **PostgreSQL**, self-hosted | Still recommended after host/DB requirement was relaxed (see below) |
 | Auth | `express-session` + bcrypt | Rubric: sessions, no JWT |
-| Session store | PostgreSQL-backed (e.g. `connect-pg-simple`) — proposed | Default MemoryStore is dev-only and loses sessions on restart |
+| Session store | PostgreSQL via `connect-pg-simple` | Used instead of the default MemoryStore, which is dev-only and loses sessions on restart |
 | Hosting | App + PostgreSQL on the same self-hosted machine, behind Cloudflare | See section 8 |
 
 ### Why PostgreSQL (even with free choice of DB)
@@ -57,7 +57,7 @@ _Last updated: 2026-11-05_
 
 | Role | Rubric slot | Permissions |
 |---|---|---|
-| `admin` | Admin/Owner | Users and roles, site defaults, help articles, lookup lists, support tickets, operational dashboard. No glucose data |
+| `admin` | Admin/Owner | Users and roles, site defaults, help articles, lookup lists, support tickets, operational dashboard. Cannot view other users' glucose data; can have their own |
 | `clinician` | Secondary role | Patient panel listing the people who invited them, with summary stats, plus printable reports. Access to any patient's data still requires an accepted care link. No admin powers |
 | `user` | Standard user | Owns their own data. Invites caregivers, and acts as a caregiver when invited |
 
@@ -223,11 +223,12 @@ Privacy note: Cloudflare decrypts traffic at its edge, so health data passes thr
 - Printable report page for doctor visits (also a clinician tool)
 - Stretch: `/api/v1/treatments` from xDrip, CSV export, email alerts, reading- or entry-level comments
 
-### Proposed folder structure
+### Folder structure (decided: routes stay separate from controllers)
 ```
 glucoscope/
-  server.js            # app setup, middleware, mount routes
+  server.js            # starts the server
   /src
+    app.js             # app setup, middleware, mount routes (no listen, so it can be tested)
     /routes            # URL -> controller mapping (incl. /api/v1 for xDrip)
     /controllers       # request handling
     /models            # DB queries + domain logic
@@ -245,7 +246,7 @@ glucoscope/
 ### Proposed timeline (~8 weeks)
 | Week | Milestone |
 |---|---|
-| 1 | ESM scaffold, Express + LiquidJS, layouts/partials, DB connection, error handling, live behind Cloudflare with `trust proxy` |
+| 1 ✔ code done, Cloudflare deploy pending | ESM scaffold, Express + LiquidJS, layouts/partials, DB connection, error handling, live behind Cloudflare with `trust proxy` |
 | 2 | Schema v1, accounts, sessions (PG store), bcrypt, roles, auth middleware, **xDrip `/api/v1/entries` + per-user upload secret, tested with a real phone** |
 | 3 | Dashboard: current reading, SVG chart |
 | 4 | Stats, settings, readings table with filters/pagination |
