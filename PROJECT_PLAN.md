@@ -243,6 +243,12 @@ glucoscope/
   .env                 # secrets (not committed)
 ```
 
+### Development workflow (decided: agentic starter, lite edition)
+- Adopted the lite agentic starter (from `agentic-lite`). [AGENTS.md](AGENTS.md) holds the conventions: plan approval before any build, risk-tiered review by five read-only reviewer agents, one task file per change in `/tasks`, and `docs/contracts.md` as living memory of every route, schema, env var and invariant.
+- Git hooks (`sh scripts/setup-hooks.sh`) and the GitHub Actions workflow in `.github/workflows/checks.yml` block commits on `main`, block unreplaced placeholders, scan for secrets, require a task ID in every commit message, and require a consensus trailer on `/docs` changes.
+- Stack values filled in: JavaScript (ESM), npm, Express 5, LiquidJS (no client framework), PostgreSQL, self-hosted behind Cloudflare, secrets in `.env`. The test runner is listed as the built-in `node:test`, which is the default until a different one is chosen.
+- Next step after the adoption PR merges: the docs bootstrap (task T-001), which writes `/docs` from the existing scaffold, before week 2 feature work.
+
 ### Proposed timeline (~8 weeks)
 | Week | Milestone |
 |---|---|
