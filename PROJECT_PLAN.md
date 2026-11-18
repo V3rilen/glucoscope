@@ -3,7 +3,7 @@
 Running record of decisions, architecture, and open questions. Updated as we talk.
 Rubric: see [PROJECT_RUBRIC.md](PROJECT_RUBRIC.md).
 
-_Last updated: 2026-11-05_
+_Last updated: 2026-11-17_
 
 ---
 
@@ -247,7 +247,8 @@ glucoscope/
 - Adopted the lite agentic starter (from `agentic-lite`). [AGENTS.md](AGENTS.md) holds the conventions: plan approval before any build, risk-tiered review by five read-only reviewer agents, one task file per change in `/tasks`, and `docs/contracts.md` as living memory of every route, schema, env var and invariant.
 - Git hooks (`sh scripts/setup-hooks.sh`) and the GitHub Actions workflow in `.github/workflows/checks.yml` block commits on `main`, block unreplaced placeholders, scan for secrets, require a task ID in every commit message, and require a consensus trailer on `/docs` changes.
 - Stack values filled in: JavaScript (ESM), npm, Express 5, LiquidJS (no client framework), PostgreSQL, self-hosted behind Cloudflare, secrets in `.env`. The test runner is listed as the built-in `node:test`, which is the default until a different one is chosen.
-- Next step after the adoption PR merges: the docs bootstrap (task T-001), which writes `/docs` from the existing scaffold, before week 2 feature work.
+- Docs bootstrap (T-001) done on 2026-11-17 on branch `chore/docs-bootstrap`. `/docs` now holds `contracts.md`, `architecture.md`, `data-model.md` and `decisions/` (ADR 0001).
+- **Decided 2026-11-17:** T-004 (the `node:test` harness and tests for the existing routes) blocks all feature work, and there is no production deploy until T-006 (the deploy and rollback procedure) lands. T-005 (migration tooling) has to land before the first table is created.
 
 ### Proposed timeline (~8 weeks)
 | Week | Milestone |

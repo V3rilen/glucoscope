@@ -2,7 +2,7 @@
 
 This folder is the project's **living memory and source of truth**. Every AI agent (Claude Code, Codex, Cursor, etc.) is required by `AGENTS.md` § 0 to read every file here at the start of every session before doing any work.
 
-> **Status of this file:** *descriptive* for the rules it restates (they exist in `AGENTS.md`, the hooks and the task files today) and *forward-looking* for the docs table below (those files do not exist until the bootstrap writes them). `AGENTS.md` is authoritative; if this file and `AGENTS.md` disagree, `AGENTS.md` wins and this file is wrong.
+> **Status of this file:** *descriptive*: the rules it restates exist in `AGENTS.md`, the hooks and the task files, and the docs in the table below were written by the T-001 bootstrap. `AGENTS.md` is authoritative; if this file and `AGENTS.md` disagree, `AGENTS.md` wins and this file is wrong.
 
 ## The bar this folder must meet
 
