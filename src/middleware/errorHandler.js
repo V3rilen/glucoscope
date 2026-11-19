@@ -17,6 +17,9 @@ export function errorHandler(err, req, res, next) {
   const status = err.status >= 400 && err.status < 600 ? err.status : 500;
   if (status >= 500) console.error(err);
 
+  // Errors raised before the Cache-Control middleware in src/app.js (a rejected
+  // form body, a static-file failure) skip it, so set the header here too.
+  res.set('Cache-Control', 'private, no-store');
   res.status(status).render('pages/error', {
     title: status === 404 ? 'Page not found' : 'Error',
     status,
