@@ -65,14 +65,22 @@ jobs:
       - name: fixture tests (every scripts/test/test-*.sh)
         run: sh scripts/test/run-all.sh
 
-      # ── YOUR PROJECT'S CHECKS GO HERE ──────────────────────────────────────────
-      # Uncomment and replace with your own lint/test commands. Keep values out of
-      # the run: text (pass them through env:), and pin any action by commit SHA.
-      # - name: project lint and tests
-      #   run: |
-      #     set -e
-      #     <your lint command>
-      #     <your test command>
+      # ── PROJECT CHECKS (T-004) ─────────────────────────────────────────────────
+      # These stay in this job on purpose: "shell scripts (lint + test)" is a
+      # required check on main, and a new job or a matrix would not be (a matrix
+      # renames the check). Node 22.9.0 is the engines floor in package.json.
+      # No cache: a cache shared between PR and main runs could be poisoned.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22.9.0'
+          package-manager-cache: false
+
+      - name: app tests (npm test)
+        run: |
+          set -e
+          node --version
+          npm ci --ignore-scripts
+          npm test
 
   procedure:
     name: procedure checks

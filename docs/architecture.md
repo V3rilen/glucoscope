@@ -33,7 +33,7 @@ Browser ──HTTPS──▶ Cloudflare edge ──(origin link: UNKNOWN, T-006)
              static (public/) ◀── M5 ── urlencoded ── no-store ── routes ── 404 ── error handler
 ```
 
-A request passes through the middleware chain in `contracts.md` § 2. Static files are answered first. Everything else gets `Cache-Control: private, no-store`, then reaches a route or the 404 handler. Any error ends in the global error handler, which always renders HTML.
+A request passes through the middleware chain in `contracts.md` § 2. Static files are answered first. Everything else gets `Cache-Control: private, no-store`, then reaches a route or the 404 handler. Any error ends in the global error handler, which always renders HTML and sets the same `Cache-Control` itself, because errors from the form parser or static files never pass the `no-store` middleware.
 
 ## 2. Trust boundaries and security model
 
@@ -57,8 +57,8 @@ A request passes through the middleware chain in `contracts.md` § 2. Static fil
 
 | Boundary | Threat | Current mitigation | Gap |
 |---|---|---|---|
-| B1 | Information disclosure (caching) | `Cache-Control: private, no-store` on every non-static response (`src/app.js:36-39`) | Cloudflare cache rules are outside the repo: `UNKNOWN` (T-006). Static files and the directory redirect are cacheable (`public, max-age=0`); this is safe only while `public/` holds no user data. |
-| B1 | Information disclosure (errors) | Stack traces hidden when `NODE_ENV=production` (`errorHandler.js:24`) | Depends on I1 (`contracts.md` § 9) being set on the server |
+| B1 | Information disclosure (caching) | `Cache-Control: private, no-store` on every non-static response (`src/app.js:36-39`), and on every error page by the error handler itself (`src/middleware/errorHandler.js:22`) | Cloudflare cache rules are outside the repo: `UNKNOWN` (T-006). Static files and the directory redirect are cacheable (`public, max-age=0`); this is safe only while `public/` holds no user data. |
+| B1 | Information disclosure (errors) | Stack traces hidden when `NODE_ENV=production` (`errorHandler.js:27`) | Depends on I1 (`contracts.md` § 9) being set on the server |
 | B1 | Tampering / XSS | Liquid `outputEscape: 'escape'` (`src/app.js:16`) | No CSP |
 | B1 | Spoofing / elevation | — | No authentication exists yet (planned: `express-session` + bcrypt, `PROJECT_PLAN.md` § 2) |
 | B1 | Denial of service | Cloudflare in front (owner decision); urlencoded body limit 100 kb | No rate limiting (planned, `PROJECT_PLAN.md` § 8). `/health` runs a DB query per call and is public. |
@@ -111,7 +111,7 @@ Logging is `console.log` / `console.error` to stdout and stderr only (`server.js
 | Package manager | npm (`package-lock.json`, lockfileVersion 3) | in code | — |
 | Hosting | Self-hosted machine behind Cloudflare | decided; live deploy `UNKNOWN` (T-006) | Instructor allows any host |
 | Secrets | `.env` file + environment variables | in code | Simple single-host deploy |
-| Test runner | built-in `node:test` | **chosen, not set up** (T-004) | No extra dependency |
+| Test runner | built-in `node:test` | in code (T-004, `npm test`) | No extra dependency |
 
 ### 5.2 Dependency inventory (from `package-lock.json`)
 - **Direct runtime dependencies:** `express` 5.3.0 (MIT), `liquidjs` 10.30.1 (MIT), `pg` 8.23.1 (MIT). No dev dependencies.
@@ -121,28 +121,33 @@ Logging is `console.log` / `console.error` to stdout and stderr only (`server.js
 
 ## 6. Testing
 
-### Current state (stated plainly)
-- **There are zero application tests.** There is no `test` script in `package.json` and no test files under `src/` or anywhere outside `scripts/test/`.
-- **No automated test guards any contract in `contracts.md`.** The regression-safety step in `AGENTS.md` § 7 ("run the test levels that exercise the touched contracts") cannot be met until **[T-004](../tasks/T-004.md)** lands. By the owner's decision (2026-11-17, `tasks/T-001.md`), **T-004 blocks all feature work.**
-- The only tests that exist are the starter's shell fixture suites for the hooks and CI gates (`scripts/test/test-*.sh`, run by `sh scripts/test/run-all.sh`). They test the procedure, not the app.
-
-### Planned levels (T-004)
+### Levels
 
 | Level | Tool | How it runs | Scope |
 |---|---|---|---|
-| Unit | `node:test` + `node:assert` | `npm test` locally and in CI | Pure helpers (planned `src/utils/`), error-handler status and message mapping |
-| Integration (HTTP) | `node:test`, importing `src/app.js` (no `listen` needed) | `npm test` | Every route in `contracts.md` § 1 and the middleware invariants in § 2 |
-| DB integration | `node:test` against a disposable PostgreSQL | set up when the first table lands (T-005) | Models and queries |
+| Unit | `node:test` + `node:assert` | `npm test` | `src/models/db.js` exports (`test/db.test.js`); the error handler called directly (`test/errorHandler.test.js`) |
+| Integration (HTTP) | `node:test` + `node:http` against the real app on `127.0.0.1`, random port | `npm test` | Every route and middleware contract in `contracts.md` §§ 1–4 (`test/app.test.js`, `test/app.production.test.js`); error handling through a test-only app built around the exported middleware (`test/errorHandler.test.js`) |
+| DB integration | `node:test` against a disposable PostgreSQL | not set up; comes with the first table (T-005) | Models and queries |
 | End-to-end | — | not planned yet | — |
 
-**Test-data approach:** none yet. T-004 must fake the DB pool for `/health` with no network access. `db.js` builds the pool when imported, so T-004 must choose a way to substitute it.
+Each **Guarded by** entry in `contracts.md` names the test file that covers it.
+
+### How it works (T-004)
+- **`npm test`** = `node --import ./test/setup.js --test "test/**/*.test.js"`. It uses Node's built-in runner with no test dependency, and it does not load `.env`.
+- **One process per file** (the runner's default). `src/app.js` reads `NODE_ENV` once, when it is imported, so production mode has its own file (`test/app.production.test.js`). Every file sets `NODE_ENV` itself before importing the app and restores it afterwards. A shell with `NODE_ENV=production` or a real `DATABASE_URL` does not change the results.
+- **No real database.**
+  - `test/helpers/db.js` `fakeDb(t, 'healthy' | 'failing' | handler)` replaces `pg.Pool.prototype.query`, which the pool in `src/models/db.js` inherits. No production code changes, and `t.mock` restores it after each test.
+  - **Tripwire:** `test/setup.js`, preloaded into every test process, replaces `pg.Client.prototype.connect`, through which every real connection path goes. A global `afterEach` **fails** any test that reached it, even when app code swallows the error (as `checkConnection` does). `test/db.test.js` proves it counts a hit, and `test/tripwire.test.js` runs a deliberately bad test file (`test/fixtures/tripwire-hit.js`) in a child process and proves the hit **fails** it, on whatever Node version runs the suite. Limit: a hit from work that outlives its test is counted against the next test, so tests await every query.
+- **HTTP:** `test/helpers/server.js` starts an app on a loopback port and sends raw requests with `node:http`, not `fetch`, because `fetch` percent-encodes `<` and would hide escaping bugs. It ignores a socket reset that arrives after a response (the 413 case), and closes all connections when the file ends.
+- **Errors that no production route raises** (thrown, rejected, out-of-range `err.status`) are tested in a test-only app that borrows the real app's views and Liquid engine (`app.engines['.liquid']`; a test fails loudly if Express stops storing it there). Production routes are not changed to make errors testable.
+- **Not guarded by a test**, and why (`contracts.md`): `PORT` (only `server.js` reads it; no test starts `server.js`), `DATABASE_URL` (tests never connect; T-005), the production template cache (not observable), the unreachable-database hang (T-006), and the CSS class coupling and the "Not present" middleware list (review only).
 
 **Flake policy:** a flaky test is a bug. Fix it or delete it. Never retry until green.
 
 ### Regression-safety check (`AGENTS.md` § 7 step 8), as it applies here
 1. List every `contracts.md` entry your diff touches (routes, middleware order, env vars, exports, templates, invariants).
-2. For each, find its **Guarded by** tests. Today every entry says `none — T-004`. After T-004, each entry names its test file.
-3. Run `npm test` (after T-004) and the gate suites (`sh scripts/test/run-all.sh`).
+2. For each, find its **Guarded by** test file. If your change alters the contract, change the test in the same PR; if the entry has no test, add one or say in the review why none is possible.
+3. Run `npm test` and the gate suites (`sh scripts/test/run-all.sh`).
 4. Update `contracts.md` in the same PR, and record the regression-safety line in the task's `## Review`.
 
 ## 7. Deployment
@@ -163,8 +168,13 @@ No staging environment exists. Other differences (host, DB, Cloudflare) are outs
 `.github/workflows/checks.yml`, which runs on every PR and on pushes to `main`/`master`:
 - **`scripts` job:** shellcheck (pinned and checksummed) over the hooks and scripts, then `sh scripts/test/run-all.sh`.
 - **`procedure` job:** `scripts/ci-checks.sh` / `scripts/ci-pr-checks.sh`. These check for placeholders, secrets, task IDs and the `/docs` consensus trailer.
-- **Project lint and test slot: empty** (commented out, `checks.yml:68-75`). No app code is built or tested in CI. Filling the slot is part of T-004, and it is Risky tier because it touches `.github/`.
-- **Whether these checks are required on `main` (branch protection):** `UNKNOWN — needs human confirmation`. It is not visible in the repo (T-006).
+- **App tests (T-004)** run in the `scripts` job, after the gate suites: `actions/setup-node` pinned by commit SHA (v7.1.0), Node **22.9.0** (the `engines` floor), its package cache **off** (a cache shared between PR and `main` runs could be poisoned), then `npm ci --ignore-scripts` and `npm test`. They sit in that job on purpose: its check is required, and a new job or a matrix would not be (a matrix renames the check). Which Node version production runs is T-006. The CI pin and the `engines` floor move together: a Node upgrade bumps both. setup-node downloads the Node binary **without a pinned checksum** (unlike shellcheck); the action itself is pinned by SHA.
+- **Branch protection (confirmed 2026-11-18).** The ruleset `protection-main` is active on the default branch. Read through the GitHub API (`repos/V3rilen/glucoscope/rulesets`) after the owner set it up. It:
+  - requires both checks, `shell scripts (lint + test)` and `procedure checks`, from the GitHub Actions app, and the branch must be up to date before merging
+  - requires a pull request (0 approvals, since the owner is the only reviewer)
+  - blocks force-pushes and branch deletion
+  - has an empty bypass list
+- **Limit:** a PR runs its **own** `checks.yml`, so a PR could remove the `npm test` step and still pass. The gate scripts are protected (`ci-pr-checks.sh` runs the target branch's copy); this step is not. Today's controls are that a `.github/` change is Risky tier and named in the PR summary (`AGENTS.md` § 8), and the owner's review. That review is a self-review in practice (the owner merges their own PRs with 0 required approvals). A mechanical check is [T-008](../tasks/T-008.md).
 
 ### Release and rollback
 - **How a release reaches production, the process manager, the `cloudflared` setup, where logs go, DB backups (`pg_dump` off-machine, test-restored; planned in `PROJECT_PLAN.md` § 8), and rollback:** all `UNKNOWN — needs human confirmation`, tracked in **[T-006](../tasks/T-006.md)**.
@@ -173,8 +183,8 @@ No staging environment exists. Other differences (host, DB, Cloudflare) are outs
 
 ## 8. Verification
 
-Checked on 2026-11-17: components from `git ls-files` (excluding `node_modules`); request flow and middleware from `src/app.js` line by line; failure modes from `src/models/db.js`, `src/controllers/homeController.js`, `src/middleware/errorHandler.js` and `server.js`; pool defaults from `node_modules/pg-pool/index.js`; versions and licenses from `package-lock.json` (81 packages counted by script); CI from `.github/workflows/checks.yml` and `scripts/test/run-all.sh`; owner decisions from `PROJECT_PLAN.md` (§ 2–3 and § 7–9 "decided"; § 11 "decided for now, open to change"). Test absence: no `test` script, and no `*.test.*` / `*.spec.*` or `test/` directory outside `scripts/test/`. Reviewers re-checked these claims against the source (`tasks/T-001.5.md`).
+Checked on 2026-11-17: components from `git ls-files` (excluding `node_modules`); request flow and middleware from `src/app.js` line by line; failure modes from `src/models/db.js`, `src/controllers/homeController.js`, `src/middleware/errorHandler.js` and `server.js`; pool defaults from `node_modules/pg-pool/index.js`; versions and licenses from `package-lock.json` (81 packages counted by script); CI from `.github/workflows/checks.yml` and `scripts/test/run-all.sh`; owner decisions from `PROJECT_PLAN.md` (§ 2–3 and § 7–9 "decided"; § 11 "decided for now, open to change"). Reviewers re-checked these claims against the source (`tasks/T-001.5.md`). **T-004 (2026-11-18):** § 6 was rewritten from the files in `test/` and `package.json`, and checked by running `npm test` (41 tests after the build review, 0 failures, three runs in a row, and again with `NODE_ENV=production` and an unreachable `DATABASE_URL` set in the shell). A test that forgets to fake the database was shown to fail. The CI step was checked against `scripts/test/test-ci-wiring.sh`. The setup-node commit was checked to be the commit tag `v7.1.0` points to, and part of `actions/setup-node`'s own history.
 
 ---
 
-**Update this doc when** any of these change: the files or directories under `src/`, `server.js`, `views/` layout structure, `public/`; `package.json` dependencies, engines or scripts; `package-lock.json` major versions or new licenses; `.github/workflows/**`; any test setup (T-004); deployment, Cloudflare, process manager, backup or rollback (T-006); a new trust boundary (for example `/api/v1/*`, which needs a threat model first); or a decision recorded in `docs/decisions/`.
+**Update this doc when** any of these change: the files or directories under `src/`, `server.js`, `views/` layout structure, `public/`; `package.json` dependencies, engines or scripts; `package-lock.json` major versions or new licenses; `.github/workflows/**`; `test/setup.js`, `test/helpers/**` or the `npm test` script; the GitHub ruleset; deployment, Cloudflare, process manager, backup or rollback (T-006); a new trust boundary (for example `/api/v1/*`, which needs a threat model first); or a decision recorded in `docs/decisions/`.
