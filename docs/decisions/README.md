@@ -20,6 +20,7 @@ One file per significant decision: one that shapes the stack, the architecture, 
 | # | Title | Status |
 |---|---|---|
 | [0001](./0001-foundational-stack.md) | Foundational stack | accepted |
+| [0002](./0002-database-migrations.md) | Database migrations, seed data, backups and test database | accepted |
 
 ---
 

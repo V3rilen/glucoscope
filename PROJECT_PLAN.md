@@ -3,7 +3,7 @@
 Running record of decisions, architecture, and open questions. Updated as we talk.
 Rubric: see [PROJECT_RUBRIC.md](PROJECT_RUBRIC.md).
 
-_Last updated: 2026-11-17_
+_Last updated: 2026-11-20_
 
 ---
 
@@ -239,7 +239,7 @@ glucoscope/
     /partials          # header, nav, footer, flash messages
     /pages ...         # one folder per feature
   /public              # css, images (no chart JS)
-  /database            # schema.sql, seed.sql
+  /database            # migrations/ (NNNN_name.sql), seed.sql (default data), seed-test.sql (dev/test only) — ADR 0002 (T-005)
   .env                 # secrets (not committed)
 ```
 
