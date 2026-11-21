@@ -20,7 +20,7 @@ Glucoscope is a self-hosted, server-rendered web app for viewing blood glucose d
 | Controllers | `src/controllers/homeController.js` | Handle requests, call models, render views |
 | Models | `src/models/db.js` | PostgreSQL pool, `query`, `checkConnection` |
 | Middleware | `src/middleware/errorHandler.js` | 404 handler and the global error handler |
-| Views | `views/layouts`, `views/pages`, `views/partials` | LiquidJS templates. All HTML is rendered on the server. |
+| Views | `src/views/layouts`, `src/views/pages`, `src/views/partials` | LiquidJS templates. All HTML is rendered on the server. |
 | Static assets | `public/` | Served at the site root. Today only `css/styles.css`. |
 
 This is the MVC layout the owner chose (`PROJECT_PLAN.md` § 9, § 13 "Folder structure"). **Planned** directories that don't exist yet: `src/utils/` and `database/`.
@@ -194,4 +194,4 @@ Checked on 2026-11-17: components from `git ls-files` (excluding `node_modules`)
 
 ---
 
-**Update this doc when** any of these change: the files or directories under `src/`, `server.js`, `views/` layout structure, `public/`; `package.json` dependencies, engines or scripts; `package-lock.json` major versions or new licenses; `.github/workflows/**`; `test/setup.js`, `test/helpers/**` or the `npm test` script; the GitHub ruleset; deployment, Cloudflare, process manager, backup or rollback (T-006); a new trust boundary (for example `/api/v1/*`, which needs a threat model first); or a decision recorded in `docs/decisions/`.
+**Update this doc when** any of these change: the files or directories under `src/`, `server.js`, `src/views/` layout structure, `public/`; `package.json` dependencies, engines or scripts; `package-lock.json` major versions or new licenses; `.github/workflows/**`; `test/setup.js`, `test/helpers/**` or the `npm test` script; the GitHub ruleset; deployment, Cloudflare, process manager, backup or rollback (T-006); a new trust boundary (for example `/api/v1/*`, which needs a threat model first); or a decision recorded in `docs/decisions/`.

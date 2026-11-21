@@ -5,7 +5,7 @@ import routes from './routes/index.js';
 import { notFound, errorHandler } from './middleware/errorHandler.js';
 
 const rootDir = path.join(import.meta.dirname, '..');
-const viewsDir = path.join(rootDir, 'views');
+const viewsDir = path.join(import.meta.dirname, 'views');
 const isProduction = process.env.NODE_ENV === 'production';
 
 const liquid = new Liquid({

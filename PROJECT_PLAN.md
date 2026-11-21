@@ -234,10 +234,10 @@ glucoscope/
     /models            # DB queries + domain logic
     /middleware        # auth, roles, patient access, validation, error handling
     /utils             # SVG chart builder, unit conversion, stats helpers
-  /views
-    /layouts           # base layout
-    /partials          # header, nav, footer, flash messages
-    /pages ...         # one folder per feature
+    /views
+      /layouts         # base layout
+      /partials        # header, nav, footer, flash messages
+      /pages ...       # one folder per feature
   /public              # css, images (no chart JS)
   /database            # migrations/ (NNNN_name.sql), seed.sql (default data), seed-test.sql (dev/test only) — ADR 0002 (T-005)
   .env                 # secrets (not committed)
