@@ -147,6 +147,14 @@ test('GET /public/css/styles.css is a 404: there is no /public prefix (R3)', asy
   assert.equal(res.status, 404);
 });
 
+for (const path of ['/views/pages/home.liquid', '/src/views/pages/home.liquid']) {
+  test(`GET ${path} is a 404: templates are not served as static files (R3)`, async () => {
+    const res = await server.request('GET', path);
+    assert.equal(res.status, 404);
+    assert.doesNotMatch(res.body, /\{%\s*layout/);
+  });
+}
+
 test('GET /css redirects to /css/ (R3)', async () => {
   const res = await server.request('GET', '/css');
   assert.equal(res.status, 301);

@@ -18,11 +18,11 @@ Every request goes through the middleware chain in § 2 in order. There are exac
 | R4 | `OPTIONS` | `/`, `/health` | none | the router's automatic `OPTIONS` responder (Express 5 `router` package) | `200`, `text/plain`, body `GET, HEAD`, header `Allow: GET, HEAD`, plus `no-store` (M7) | — |
 | R5 | any other | anything R1–R4 do not answer, including other methods on `/` and `/health` (for example `POST /`) | none | `notFound` then `errorHandler`, `src/middleware/errorHandler.js` | n/a | `404` HTML error page (§ 3.3). Express 5 sends no `405`. |
 
-**R1, invariant:** `GET /` renders HTML with status 200 and needs no database. **Blast radius:** the header brand link and the "Home" nav link (`views/partials/header.liquid:3,5`) and the "Back to home" link on the error page (`views/pages/error.liquid:5`) all point here. **Guarded by:** `test/app.test.js` (status, content type, layout and page content).
+**R1, invariant:** `GET /` renders HTML with status 200 and needs no database. **Blast radius:** the header brand link and the "Home" nav link (`src/views/partials/header.liquid:3,5`) and the "Back to home" link on the error page (`src/views/pages/error.liquid:5`) all point here. **Guarded by:** `test/app.test.js` (status, content type, layout and page content).
 
 **R2, invariant:** the path stays `/health`. The status is `200` only when `SELECT 1` succeeds, otherwise `503`. The body is `{"status":"ok"|"unavailable"}` and never includes error details. It runs one database query per request. **Known gap:** the pool sets no `connectionTimeoutMillis` (§ 6). A refused connection fails fast and returns 503. An **unreachable** host makes `/health` wait until the operating system's TCP connect timeout expires, which depends on the OS and is on the order of minutes on Linux. Only then does it return 503. Cloudflare may give up with its own timeout first. While this happens, requests beyond the pool's 10 connections queue with no limit. `PGCONNECT_TIMEOUT` does **not** help (§ 7.2). The fix (`connectionTimeoutMillis`) is carried into T-009 from the owner's reviewed database work. **Blast radius:** `README.md` documents the 200/503 behaviour. Any uptime monitor pointed at it is `UNKNOWN — needs human confirmation` (T-006). **Guarded by:** `test/app.test.js` (healthy → 200 with one `SELECT 1`; failing → 503 with no error detail). The unreachable-host hang is not guarded (T-009).
 
-**R3, invariant:** static files are served at the root, not under `/public`. Static responses are sent **before** the `Cache-Control` middleware and the form parser, so they do **not** carry `Cache-Control: private, no-store` (§ 2). Nothing with user data may ever be put in `public/`. **Blast radius:** `views/layouts/main.liquid:7` links `/css/styles.css`. Moving the mount or the file breaks every page's styling. **Guarded by:** `test/app.test.js` (`/css/styles.css` with `public, max-age=0`, no `/public` prefix, `GET /css` → 301).
+**R3, invariant:** static files are served at the root, not under `/public`. Static responses are sent **before** the `Cache-Control` middleware and the form parser, so they do **not** carry `Cache-Control: private, no-store` (§ 2). Nothing with user data may ever be put in `public/`. **Blast radius:** `src/views/layouts/main.liquid:7` links `/css/styles.css`. Moving the mount or the file breaks every page's styling. **Guarded by:** `test/app.test.js` (`/css/styles.css` with `public, max-age=0`, no `/public` prefix, `GET /css` → 301; `/views/…` and `/src/views/…` template paths → 404 with no template source).
 
 **R4, invariant:** `OPTIONS` on a defined route is answered by the router, not by app code, and reveals only the allowed methods. **Guarded by:** `test/app.test.js` (`OPTIONS /` and `OPTIONS /health`).
 
@@ -36,7 +36,7 @@ From `src/app.js`. The order matters. Each layer applies only to requests that r
 
 | # | Line | Middleware / setting | Invariant | Breaks if changed |
 |---|---|---|---|---|
-| M1 | 22–24 | LiquidJS registered as the `liquid` view engine, views root `views/` | `res.render('pages/x')` resolves to `views/pages/x.liquid` | Every `res.render` call (R1, error handler) |
+| M1 | 22–24 | LiquidJS registered as the `liquid` view engine, views root `src/views/` | `res.render('pages/x')` resolves to `src/views/pages/x.liquid` | Every `res.render` call (R1, error handler) |
 | M2 | 25 | `app.disable('x-powered-by')` | No `X-Powered-By` header on any response | Small information leak if removed |
 | M3 | 26 | `app.locals.siteName = 'Glucoscope'` | Every template gets `siteName` | Layout `<title>`, header, footer, home page (§ 4) |
 | M4 | 30 | `trust proxy = 1`, **only when `NODE_ENV === 'production'`** | In production `req.ip`, `req.protocol` and `req.secure` come from the first proxy hop (Cloudflare or `cloudflared`). In any other environment they don't. | Nothing reads `req.ip`, `req.protocol` or `req.secure` today. Future secure cookies and rate limiting will depend on this. The comment at `src/app.js:28-29` describes that future need; **no sessions exist yet.** |
@@ -49,7 +49,7 @@ From `src/app.js`. The order matters. Each layer applies only to requests that r
 
 Not present: no JSON body parser (`express.json`), no session, cookie, CSRF, CORS, compression, security-header (CSP/HSTS), logging or rate-limit middleware.
 
-**Guarded by:** `test/app.test.js` (M2 on pages, `/health`, static files, 404s and parser errors; M3; M4 off; M5–M7 headers; M6 parser errors), `test/app.production.test.js` (M4 on), `test/errorHandler.test.js` (M10 arity). M1's production template cache can't be observed from a test and is not guarded. The "Not present" list is checked by review only.
+**Guarded by:** `test/app.test.js` (M1 views root, by every page and error-page render; M2 on pages, `/health`, static files, 404s and parser errors; M3; M4 off; M5–M7 headers; M6 parser errors), `test/app.production.test.js` (M4 on), `test/errorHandler.test.js` (M10 arity). M1's production template cache can't be observed from a test and is not guarded. The "Not present" list is checked by review only.
 
 ## 3. Request and response contracts
 
@@ -71,22 +71,22 @@ Not present: no JSON body parser (`express.json`), no session, cookie, CSRF, COR
   - 404 → `We couldn't find that page.`
   - other < 500 → `That request couldn't be processed.`
   - ≥ 500 → `Something went wrong on our end. Please try again.`
-- The page always includes a **"Back to home"** link to `/` (`views/pages/error.liquid:5`).
+- The page always includes a **"Back to home"** link to `/` (`src/views/pages/error.liquid:5`).
 - **Stack traces:** `stack` is `null` when `NODE_ENV === 'production'`, otherwise `err.stack`, which renders in `<pre class="error-stack">` (line 27, `error.liquid:6-8`). The 404 error's message includes `req.originalUrl`, so in development a user-supplied URL is echoed back inside the stack. That is safe only because of output escaping (§ 9 I2).
 
 **Invariant:** no internal detail (stack, SQL, error message) reaches the client in production. **Guarded by:** `test/app.production.test.js` (404 and 413 pages in production) and `test/errorHandler.test.js` (500 in production; status mapping, titles, messages, logging, `headersSent`, `Cache-Control`).
 
 ## 4. View and template contracts
 
-Configured at `src/app.js:11-18`: root `views/`, layouts `views/layouts/`, partials `views/partials/`, extension `.liquid`, `outputEscape: 'escape'`, and `cache` on only in production.
+Configured at `src/app.js:11-18`: root `src/views/`, layouts `src/views/layouts/`, partials `src/views/partials/`, extension `.liquid`, `outputEscape: 'escape'`, and `cache` on only in production.
 
 | Template | Kind | Variables it reads | Set by |
 |---|---|---|---|
-| `views/layouts/main.liquid` | layout `main`, defines block `content` | `title`, `siteName` | each page's render locals and `app.locals` |
-| `views/pages/home.liquid` | page (`{% layout 'main' %}`) | `siteName` | `app.locals` |
-| `views/pages/error.liquid` | page | `status`, `title`, `message`, `stack` | `errorHandler` |
-| `views/partials/header.liquid` | partial, included with `{% render %}` | `siteName` (passed explicitly) | `main.liquid:10` |
-| `views/partials/footer.liquid` | partial, included with `{% render %}` | `siteName` (passed explicitly) | `main.liquid:14` |
+| `src/views/layouts/main.liquid` | layout `main`, defines block `content` | `title`, `siteName` | each page's render locals and `app.locals` |
+| `src/views/pages/home.liquid` | page (`{% layout 'main' %}`) | `siteName` | `app.locals` |
+| `src/views/pages/error.liquid` | page | `status`, `title`, `message`, `stack` | `errorHandler` |
+| `src/views/partials/header.liquid` | partial, included with `{% render %}` | `siteName` (passed explicitly) | `main.liquid:10` |
+| `src/views/partials/footer.liquid` | partial, included with `{% render %}` | `siteName` (passed explicitly) | `main.liquid:14` |
 
 **Invariants**
 - Every page sets `title` and uses `{% layout 'main' %}` with `{% block content %}`. The browser tab reads `{{ title }} | {{ siteName }}`.
@@ -192,9 +192,9 @@ There is no authentication, no sessions, no roles, no CSRF protection, no input 
 
 How this inventory was built (2026-11-17):
 - **Routes:** read `src/routes/index.js` and every `app.use` / `app.set` / `app.engine` / `app.disable` in `src/app.js`. Grepped `src/` and `server.js` for `router.`, `app.`, `Router(` and `.use(`. No other mounts exist.
-- **Env vars:** grepped `server.js`, `src/` and `views/` for `process.env`. `pg`'s implicit vars were read from `node_modules/pg/lib/connection-parameters.js`, `defaults.js`, `client.js` and `node_modules/pgpass/lib/helper.js`.
+- **Env vars:** grepped `server.js`, `src/` and `views/` (moved to `src/views/` in T-012) for `process.env`. `pg`'s implicit vars were read from `node_modules/pg/lib/connection-parameters.js`, `defaults.js`, `client.js` and `node_modules/pgpass/lib/helper.js`.
 - **Exports:** grepped `src/` for `export`. Pool defaults were read from `node_modules/pg-pool/index.js`.
-- **Templates and CSS:** read every file in `views/` and grepped `public/css/styles.css` for class selectors.
+- **Templates and CSS:** read every file in `views/` (moved to `src/views/` in T-012) and grepped `public/css/styles.css` for class selectors.
 - **Absences:** checked for `**/*.sql`, `CREATE TABLE`, `cron`, `EventEmitter`, `fetch(` and flag patterns outside `node_modules`. None found.
 - **Versions and licenses:** read `package-lock.json`.
 - **Runtime behaviour:** started the app on a random port and sent `OPTIONS /`, `OPTIONS /health`, `GET /css`, `GET /css/styles.css`, `POST /` and `GET /nope`, checking status, `Cache-Control`, `Allow`, `Location` and `X-Powered-By` (results under § 1). `pg` timeout behaviour was checked in `node_modules/pg/lib/client.js:116` and `connection-parameters.js:143-150`.
@@ -203,4 +203,4 @@ How this inventory was built (2026-11-17):
 
 ---
 
-**Update this doc when** any of these change: `src/app.js`, `src/routes/**`, `src/controllers/**`, `src/middleware/**`, `src/models/**`, `server.js`, `views/**`, the class names in `public/css/**`, any file added to `public/`, `package.json` (scripts, engines, type, dependencies), `.env.example`, `test/setup.js` or `test/helpers/**`, a test named in a **Guarded by** being renamed or removed, any new `process.env` read, any new SQL, table or migration, any new outbound call, job, event or flag, or the Cloudflare or origin setup. A change to a contract and the update to this file belong in one pull request (`AGENTS.md` § 8).
+**Update this doc when** any of these change: `src/app.js`, `src/routes/**`, `src/controllers/**`, `src/middleware/**`, `src/models/**`, `server.js`, `src/views/**`, the class names in `public/css/**`, any file added to `public/`, `package.json` (scripts, engines, type, dependencies), `.env.example`, `test/setup.js` or `test/helpers/**`, a test named in a **Guarded by** being renamed or removed, any new `process.env` read, any new SQL, table or migration, any new outbound call, job, event or flag, or the Cloudflare or origin setup. A change to a contract and the update to this file belong in one pull request (`AGENTS.md` § 8).
